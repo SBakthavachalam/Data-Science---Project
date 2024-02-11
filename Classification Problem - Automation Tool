@@ -1,0 +1,282 @@
+# import required packages
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.naive_bayes import CategoricalNB
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.impute import SimpleImputer, KNNImputer
+
+# This function reads a CSV file specified by the user. If the file is not found, 
+# it tries to prepend 'r' to the file path and attempts to read again. 
+# If the file is still not found, it prints an error message.
+def GetInputandApplyMachineLearningModel():
+    # df = pd.read_csv('/content/loan-data.csv')
+    try:
+        file_Path = input('Enter your file path')
+        df = pd.read_csv(file_Path)
+    except FileNotFoundError:
+        try:
+            df = pd.read_csv('r'+ file_Path)
+        except FileNotFoundError:
+            print("File not found. Please provide a valid file path.")
+            return
+
+    file = open('Output_Model_Analysis.txt', 'w')
+    file.close()
+
+    
+    # Get the X Feature from User
+    display(df.info())
+    display(df.sample(10))
+    display(df.keys())
+    Feature_Input = input('Enter your Feature in , seperated string').replace("'", '').split(',')
+    X = []
+    for i in Feature_Input:
+        X.append(i.strip())
+    X = df[X]
+
+    # Get y target variable
+    display(df.head(5))
+    display(df.columns)
+    target_input = input('Enter your Target').replace("'", '')
+    y = df[target_input]
+    display(X.ndim,y.ndim),display(X.isnull().sum(), y.isnull().sum())
+    display(X.shape)
+
+    # write into file
+    file = open('Output_Model_Analysis.txt', 'a')
+    file.write(f"df.info : \n{df.info()}\n\n")
+    file.write(f"df.sample(10) : \n{df.sample(10)}\n\n")
+    file.write(f"df.columns(10) : \n{df.columns}\n\n")
+    file.write(f"X.ndim() : \n{X.ndim}\n\n")
+    file.write(f"y.ndim() : \n{y.ndim}\n\n")
+    file.write(f"X.isnull() : \n{X.isnull().sum()}\n\n")
+    file.write(f"y.isnull() : \n{y.isnull().sum()}\n\n")
+    file.write(f"X.shape() : \n{X.shape}\n\n")
+    file.write(f"y.shape() : \n{y.shape}\n\n")
+    file.write(f"y.nunique() : \n{y.nunique()}\n\n")
+    file.close()
+    proceed = input('Please have a look into Output_Model_Analysis.txt file, and do you want to procced to determine best model? (yes/no)')
+    if str.upper(proceed) == 'YES':
+        file = open('Output_Best_Model.txt', 'w')
+        file.close()
+        file = open('Output_Best_Model_InDetails.txt', 'w')
+        file.close()
+        Default_Visualization(df, target_input)
+        FillMissingValue_PreProcessing_ModelEvaluation_Score(X,y, df)
+
+# This function creates histogram and box plot visualizations for the features 
+# in the DataFrame df.
+def Default_Visualization(df, target_input):
+    # Making a feature distribution on histogram plot
+    df.hist(bins=60, figsize=(10, 20))
+    # add the sub title
+    plt.suptitle('Histogram - Data Distribution', x=0.5, y=1.02, ha='center', fontsize='large')
+    # adjust the plot gaps
+    plt.tight_layout()
+    plt.show()
+
+    # Box Plot for All Features
+    df.boxplot(figsize=(12, 8))
+    # add the sub title
+    plt.suptitle('Box Plot - Data Distribution', x=0.5, y=1.02, ha='center', fontsize='large')
+    # adjust the plot gaps
+    plt.tight_layout()
+    plt.show()
+
+# This function applies Simple Imputer and KNN Imputer to fill missing values 
+# in the DataFrame df. Then, it calls PreProcessingMeethod and Write_Best_Model 
+# functions.
+def FillMissingValue_PreProcessing_ModelEvaluation_Score(X, y, df):
+    df_ML_algorithm = []
+    df_Accuracy_Score = []
+    df_Classification_Report_Accuracy = []
+    # Appy Simple Imputer
+    imputer_name = 'Simple Imputer'
+    for col in X.columns:
+        if df[col].isnull().sum() > 0:
+            print(col, df[col].isnull().sum())
+            simple = SimpleImputer()
+            simple.fit(df[[col]])
+            df[[col]] = simple.transform(df[[col]])
+    PreProcessingMeethod(X, y, imputer_name,
+                         df_ML_algorithm, df_Accuracy_Score, 
+                         df_Classification_Report_Accuracy)
+
+    # Appy KNN Imputer
+    imputer_name = 'KNN Imputer'
+    for col in X.columns:
+        if df[col].isnull().sum() > 0:
+            print(col, df[col].isnull().sum())
+            simple = KNNImputer()
+            simple.fit(df[[col]])
+            df[[col]] = simple.transform(df[[col]])
+    PreProcessingMeethod(X, y, imputer_name,
+                         df_ML_algorithm, df_Accuracy_Score, 
+                         df_Classification_Report_Accuracy)
+
+    # add multiple imputer if really reuired here
+
+    # Write Best mode in txt file
+    Write_Best_Model(df_ML_algorithm, df_Accuracy_Score, 
+                     df_Classification_Report_Accuracy)
+
+# This function applies Standard Scaler and MinMax Scaler preprocessing 
+# techniques to the features in X. It calls ML_algorithms to evaluate machine 
+# learning models.
+def PreProcessingMeethod(X, y, imputer_name,
+                         df_ML_algorithm, df_Accuracy_Score, 
+                         df_Classification_Report_Accuracy):
+    # Create StandardScaler and MinMaxScaler instances
+    standard_scaler = StandardScaler()
+    minmax_scaler = MinMaxScaler()
+
+    # Define a list of pre-processing techniques
+    preprocess_techniques = ['Standard_Scaler', 'MinMax_Scaler']
+
+    # Apply each pre-processing technique
+    for scaler_name in preprocess_techniques:
+        if scaler_name == 'Standard_Scaler':
+            # Use StandardScaler
+            X_scaled = standard_scaler.fit_transform(X)
+            ML_algorithms(X_scaled, y, scaler_name, imputer_name,
+                          df_ML_algorithm, df_Accuracy_Score, 
+                          df_Classification_Report_Accuracy)
+            
+        elif scaler_name == 'MinMax_Scaler':
+            # Use MinMaxScaler
+            X_scaled = minmax_scaler.fit_transform(X)
+            ML_algorithms(X_scaled, y, scaler_name, imputer_name, 
+                          df_ML_algorithm, df_Accuracy_Score, 
+                          df_Classification_Report_Accuracy)
+
+        else:
+            raise ValueError(f"Unknown scaler: {scaler_name}")
+    return (df_ML_algorithm, df_Accuracy_Score, df_Classification_Report_Accuracy)
+
+
+# This function defines machine learning models (Logistic Regression, 
+# Decision Tree, RandomForest, KNeighbors, and SVC) and evaluates them using 
+# accuracy, classification report, and confusion matrix. Results are written to
+# an output file.
+def ML_algorithms(X_scaled, y, scaler_name, imputer_name, 
+                  df_ML_algorithm, df_Accuracy_Score, 
+                  df_Classification_Report_Accuracy):
+    lr = LogisticRegression()
+    dtc = DecisionTreeClassifier()
+    rfc = RandomForestClassifier()
+    knn = KNeighborsClassifier(n_neighbors=best_params_for_KNN(X_scaled, y))
+    svc = SVC(probability=True)
+    nb = CategoricalNB(force_alpha=True)
+    seperater = '----------------------------------------------------------------------------'
+
+    classifiers = [lr, dtc, rfc, knn, svc]
+    classifier_names = ['Logistics Regression', 'Decision Tree Classifier', 'Random Forest Classifier', 'Known Nearest Neighbors', 'Support Vector Classifier']
+
+    df_algorithm = pd.DataFrame(list(zip(classifiers, classifier_names)), 
+                                columns=['ML_algorithm', 'ML_Desc'])
+
+    # Split the data to train the model
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, train_size=0.80)
+
+    # Loop through the algorithms and print their names
+    for index, row in df_algorithm.iterrows():
+        # Train the model
+        row['ML_algorithm'].fit(X_train, y_train)
+        # Make predictions
+        y_pred = row['ML_algorithm'].predict(X_test)
+
+        # Evaluate the model
+        # Calculate accuracy score.
+        # print('Pre-processing : ', scaler_name, '\n', seperater)
+        Accuracy = row['ML_algorithm'].score(X_test, y_test)
+        Accuracy_Score = accuracy_score(y_pred, y_test)
+        Classification_Report_f1 = classification_report(y_pred, y_test, output_dict=True)
+        Classification_Report = classification_report(y_pred, y_test)
+        Confusion_Matrix = confusion_matrix(y_pred, y_test)
+        file = open('Output_Best_Model_InDetails.txt', 'a')
+        file.write(seperater + "\n")
+        file.write(f"The criteria that have been applied : \n")
+        file.write(f"   Imputer to fill null Value, if any : {imputer_name}\n")
+        file.write(f"   Pre-processing                     : {scaler_name}\n")
+        file.write(f"   Machine Learning Algorithm         : {row['ML_algorithm']}\n\n")
+        file.write(f"Below are the metrics used to evaluate the model: \n")
+        file.write(f"   calculates the accuracy of the model score(X_test, y_test): {Accuracy}\n")
+        file.write(f"   Accuracy_Score                                            : {Accuracy_Score}\n")
+        file.write(f"   Classification Report                                     :\n{Classification_Report}\n")
+        file.write(f"   Classification Report Accuracy||f1-Score                  : {Classification_Report_f1['accuracy']}\n")
+        file.write(f"   Confusion Matrix                                          :\n{Confusion_Matrix}\n")
+        file.close()
+
+        #Append all the scores
+        dummy = imputer_name + " & " + scaler_name + " & " + str(row['ML_algorithm'])
+        df_ML_algorithm.append(dummy)
+        df_Accuracy_Score.append(Accuracy_Score)
+        df_Classification_Report_Accuracy.append(Classification_Report_f1['accuracy'])
+    return (df_ML_algorithm, df_Accuracy_Score, df_Classification_Report_Accuracy)
+
+
+# This function writes the best machine learning models based on accuracy score 
+# and classification report accuracy to an output file. It also creates and displays 
+# plots for visualization.
+def Write_Best_Model(df_ML_algorithm, df_Accuracy_Score, 
+                             df_Classification_Report_Accuracy):
+    # create data frame and sort by score in desc  
+    df_AccScre = pd.DataFrame(zip(df_ML_algorithm, df_Accuracy_Score), 
+                              columns=['ML_algorithm', 'Accuracy_Score'])
+    df_ClassScre = pd.DataFrame(zip(df_ML_algorithm, df_Classification_Report_Accuracy ), 
+                                columns=['ML_algorithm', 'Classification_Report_Accuracy'])  
+    df_AccScre = df_AccScre.sort_values(by=['Accuracy_Score'], ascending=False)
+    df_ClassScre = df_ClassScre.sort_values(by=['Classification_Report_Accuracy'], ascending=False)
+    display(df_AccScre)
+    display(df_ClassScre)
+    file = open('Output_Best_Model.txt', 'a')
+    file.write(f"Accuracy_Score:\n{df_AccScre}\n\n")
+    file.write(f"Classification_Report_Accuracy:\n{df_ClassScre}\n\n")
+    file.close()
+
+    # Accuracy Score
+    plt.figure(figsize=(20, 10))
+    plt.plot(df_AccScre['ML_algorithm'], df_AccScre['Accuracy_Score'],
+             marker="o", linestyle="--", markeredgecolor="purple")
+    plt.xlabel("Clasfications Models")
+    plt.ylabel("Accuracy Score")
+    plt.title("Models against Accuracy Score", fontdict={"font": "SERIF", "fontsize": 15, "color": "purple"})
+    plt.grid(axis="both")
+    plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
+    plt.tight_layout()  # Adjust layout for better display
+    plt.show()
+
+    # Classification Report - Accuracy Score
+    plt.figure(figsize=(20, 10))
+    plt.plot(df_ClassScre['ML_algorithm'], df_ClassScre['Classification_Report_Accuracy'],
+             marker="o", linestyle="-", markeredgecolor="purple")
+    plt.xlabel("Classification Models")
+    plt.ylabel("Classification Report - Accuracy Score")
+    plt.title("Models against Accuracies", fontdict={"font": "SERIF", "fontsize": 15, "color": "purple"})
+    plt.grid(axis="both")
+    plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
+    plt.tight_layout()  # Adjust layout for better display
+    plt.show()
+
+
+# This function performs a grid search to find the best number of neighbors 
+# for KNeighborsClassifier.
+def best_params_for_KNN(X_scaled, y):
+    from sklearn.model_selection import GridSearchCV
+    import numpy as np
+    knngird = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = {'n_neighbors': np.arange(1, 20)}, cv=5)
+    knngird.fit(X_scaled, y)
+    return knngird.best_params_['n_neighbors']
+
+GetInputandApplyMachineLearningModel()
+
+
+-----------------------------------------------------------------------------------------------------------------------------
